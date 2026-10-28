@@ -233,17 +233,44 @@ def _call_groq(system_msg: str, user_msg: str, model: str) -> dict:
     # Random seed → different results for same input
     seed = random.randint(0, 2**31 - 1)
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_msg},
-            {"role": "user",   "content": user_msg},
-        ],
-        temperature=LLM_TEMPERATURE,
-        max_tokens=LLM_MAX_TOKENS,
-        seed=seed,                                  # randomness across runs
-        response_format={"type": "json_object"},    # force JSON output
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user",   "content": user_msg},
+            ],
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+            seed=seed,                                  # randomness across runs
+            response_format={"type": "json_object"},    # force JSON output
+        )
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        fallback_models = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+        if any(w in err_msg for w in ["does not exist", "decommissioned", "model_not_found"]) and model not in fallback_models:
+            success = False
+            for fb in fallback_models:
+                try:
+                    response = client.chat.completions.create(
+                        model=fb,
+                        messages=[
+                            {"role": "system", "content": system_msg},
+                            {"role": "user",   "content": user_msg},
+                        ],
+                        temperature=LLM_TEMPERATURE,
+                        max_tokens=LLM_MAX_TOKENS,
+                        seed=seed,
+                        response_format={"type": "json_object"},
+                    )
+                    success = True
+                    break
+                except Exception:
+                    continue
+            if not success:
+                raise exc
+        else:
+            raise exc
 
     raw = response.choices[0].message.content
     try:
