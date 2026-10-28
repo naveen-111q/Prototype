@@ -277,7 +277,12 @@ def generate_projects(
 
     Raises RuntimeError with a user-friendly message if all retries fail.
     """
-    model = os.environ.get("GROQ_MODEL", DEFAULT_MODEL)
+    model = os.environ.get("GROQ_MODEL")
+    if not model:
+        try:
+            model = st.secrets.get("GROQ_MODEL", DEFAULT_MODEL)
+        except Exception:
+            model = DEFAULT_MODEL
 
     last_error = None
     last_good_data = None   # keep the last valid JSON in case all retries fail
